@@ -9,11 +9,9 @@ sudo apt-get remove sdcc sdcc-libraries
 sudo apt-get install sdcc
 ```
 
-## install stm8flash flash tool
+## build stm8flash flash tool
 
 ```
-git clone https://github.com/vdudouyt/stm8flash.git
-cd stm8flash
+cd toos/stm8flash
 make
-sudo make install
 ```
