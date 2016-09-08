@@ -1,0 +1,4 @@
+# Test
+
+- Connect the TIM1_CC1 pin to COO pin
+- Read the value of LSIClockFreq variable
