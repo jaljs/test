@@ -14,6 +14,7 @@ __IO uint32_t LSIClockFreq = 0;
 uint16_t ICValue1 =0, ICValue2 =0;
 /* Private function prototypes -----------------------------------------------*/
 static void TIM1_Config(void);
+static int putchar(char c);
 /* Private functions ---------------------------------------------------------*/
 /* Public functions ----------------------------------------------------------*/
 
@@ -24,10 +25,16 @@ static void TIM1_Config(void);
   */
 void main(void)
 {
+	//unsigned long int d;
 
-#if 1
-  /* Connect LSI to COO pin*/
-  GPIO_Init(GPIOE, GPIO_PIN_0, GPIO_MODE_OUT_PP_LOW_FAST);
+	/* for debug */
+	CLK_HSIPrescalerConfig(CLK_PRESCALER_HSIDIV1);
+	UART1_DeInit();
+	UART1_Init((uint32_t)115200, UART1_WORDLENGTH_8D, UART1_STOPBITS_1, UART1_PARITY_NO,
+	              UART1_SYNCMODE_CLOCK_DISABLE, UART1_MODE_TXRX_ENABLE);
+
+  /* Connect LSI to COO pin*/ /* PC4: CCO */
+  GPIO_Init(GPIOC, GPIO_PIN_4, GPIO_MODE_OUT_PP_LOW_FAST);
   CLK_CCOConfig(CLK_OUTPUT_LSI);
   CLK_CCOCmd(ENABLE);
 
@@ -37,22 +44,28 @@ void main(void)
   /* Compute LSI clock frequency */
   LSIClockFreq = (8 * TIM1ClockFreq) / (ICValue2 - ICValue1);
   
-  /* Insert a break point here */
-  while (1)
-  {}
-#endif
-
-#if 0
-	int d;
 	// Configure pins
-	PE_DDR = 0x20;
-	PE_CR1 = 0x20;
+	//PE_DDR = 0x20;
+	//PE_CR1 = 0x20;
 	// Loop
-	do {
-		PE_ODR ^= 0x20;
-		for(d = 0; d < 29000; d++) { }
-	} while(1);
-#endif
+	//do {
+	//	PE_ODR ^= 0x20;
+	//	for(d = 0; d < 255000; d++) { }
+	//	//for(d = 0; d < LSIClockFreq; d++) { }
+	//} while(1);
+	putchar('H');
+	putchar('e');
+	putchar('L');
+	putchar('L');
+	putchar('o');
+	putchar('\n');
+}
+
+static int putchar(char c)
+{
+	UART1_SendData8(c);
+	while (UART1_GetFlagStatus(UART1_FLAG_TXE) == RESET);
+	return c;
 }
 
 /**
@@ -83,33 +96,3 @@ static void TIM1_Config(void)
   ICValue2 = TIM1_GetCapture1();
   TIM1_ClearFlag(TIM1_FLAG_CC1);
 }
-
-#ifdef USE_FULL_ASSERT
-
-/**
-  * @brief  Reports the name of the source file and the source line number
-  *   where the assert_param error has occurred.
-  * @param file: pointer to the source file name
-  * @param line: assert_param error line source number
-  * @retval None
-  */
-void assert_failed(uint8_t* file, uint32_t line)
-{ 
-	(void)file;
-	(void)line;
-  /* User can add his own implementation to report the file name and line number,
-     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
-
-  /* Infinite loop */
-  while (1)
-  {
-  }
-}
-#endif
-
-/**
-  * @}
-  */
-
-
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

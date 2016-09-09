@@ -9,8 +9,9 @@ all:
 	$(SDCC) -c ../drivers/stm8s_gpio.c -I../include -I./ $(CFLAGS) $(LDFLAGS)
 	$(SDCC) -c ../drivers/stm8s_clk.c -I../include -I./ $(CFLAGS) $(LDFLAGS)
 	$(SDCC) -c ../drivers/stm8s_tim1.c -I../include -I./ $(CFLAGS) $(LDFLAGS)
+	$(SDCC) -c ../drivers/stm8s_uart1.c -I../include -I./ $(CFLAGS) $(LDFLAGS)
 	$(SDCC) -c main.c -I../include -I./ $(CFLAGS) $(LDFLAGS)
-	$(SDCC) main.rel stm8s_gpio.rel stm8s_clk.rel stm8s_tim1.rel $(CFLAGS) $(LDFLAGS)
+	$(SDCC) main.rel stm8s_gpio.rel stm8s_clk.rel stm8s_tim1.rel stm8s_uart1.rel $(CFLAGS) $(LDFLAGS)
 
 clean:
 	rm -rf *.asm *.sym *.lst *.rel *.ihx *.map *.lk *.rst
