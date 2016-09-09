@@ -189,9 +189,6 @@ static void TI4_Config(uint8_t TIM1_ICPolarity,
   */
 void TIM1_SetIC1Prescaler(TIM1_ICPSC_TypeDef TIM1_IC1Prescaler)
 {
-  /* Check the parameters */
-  assert_param(IS_TIM1_IC_PRESCALER_OK(TIM1_IC1Prescaler));
-  
   /* Reset the IC1PSC Bits */ /* Set the IC1PSC value */
   TIM1->CCMR1 = (uint8_t)((uint8_t)(TIM1->CCMR1 & (uint8_t)(~TIM1_CCMR_ICxPSC)) 
                           | (uint8_t)TIM1_IC1Prescaler);
@@ -209,10 +206,6 @@ void TIM1_SetIC1Prescaler(TIM1_ICPSC_TypeDef TIM1_IC1Prescaler)
   */
 void TIM1_SetIC2Prescaler(TIM1_ICPSC_TypeDef TIM1_IC2Prescaler)
 {
-  
-  /* Check the parameters */
-  assert_param(IS_TIM1_IC_PRESCALER_OK(TIM1_IC2Prescaler));
-  
   /* Reset the IC1PSC Bits */ /* Set the IC1PSC value */
   TIM1->CCMR2 = (uint8_t)((uint8_t)(TIM1->CCMR2 & (uint8_t)(~TIM1_CCMR_ICxPSC))
                           | (uint8_t)TIM1_IC2Prescaler);
@@ -230,10 +223,6 @@ void TIM1_SetIC2Prescaler(TIM1_ICPSC_TypeDef TIM1_IC2Prescaler)
   */
 void TIM1_SetIC3Prescaler(TIM1_ICPSC_TypeDef TIM1_IC3Prescaler)
 {
-  
-  /* Check the parameters */
-  assert_param(IS_TIM1_IC_PRESCALER_OK(TIM1_IC3Prescaler));
-  
   /* Reset the IC1PSC Bits & Set the IC1PSC value */
   TIM1->CCMR3 = (uint8_t)((uint8_t)(TIM1->CCMR3 & (uint8_t)(~TIM1_CCMR_ICxPSC)) | 
                           (uint8_t)TIM1_IC3Prescaler);
@@ -251,10 +240,6 @@ void TIM1_SetIC3Prescaler(TIM1_ICPSC_TypeDef TIM1_IC3Prescaler)
   */
 void TIM1_SetIC4Prescaler(TIM1_ICPSC_TypeDef TIM1_IC4Prescaler)
 {
-  
-  /* Check the parameters */
-  assert_param(IS_TIM1_IC_PRESCALER_OK(TIM1_IC4Prescaler));
-  
   /* Reset the IC1PSC Bits &  Set the IC1PSC value */
   TIM1->CCMR4 = (uint8_t)((uint8_t)(TIM1->CCMR4 & (uint8_t)(~TIM1_CCMR_ICxPSC)) |
                           (uint8_t)TIM1_IC4Prescaler);
@@ -278,13 +263,6 @@ void TIM1_ICInit(TIM1_Channel_TypeDef TIM1_Channel,
                  TIM1_ICPSC_TypeDef TIM1_ICPrescaler,
                  uint8_t TIM1_ICFilter)
 {
-  /* Check the parameters */
-  assert_param(IS_TIM1_CHANNEL_OK(TIM1_Channel));
-  assert_param(IS_TIM1_IC_POLARITY_OK(TIM1_ICPolarity));
-  assert_param(IS_TIM1_IC_SELECTION_OK(TIM1_ICSelection));
-  assert_param(IS_TIM1_IC_PRESCALER_OK(TIM1_ICPrescaler));
-  assert_param(IS_TIM1_IC_FILTER_OK(TIM1_ICFilter));
-  
   if (TIM1_Channel == TIM1_CHANNEL_1)
   {
     /* TI1 Configuration */
@@ -331,9 +309,6 @@ void TIM1_ICInit(TIM1_Channel_TypeDef TIM1_Channel,
   */
 void TIM1_Cmd(FunctionalState NewState)
 {
-  /* Check the parameters */
-  assert_param(IS_FUNCTIONALSTATE_OK(NewState));
-  
   /* set or Reset the CEN Bit */
   if (NewState != DISABLE)
   {
@@ -365,9 +340,6 @@ void TIM1_Cmd(FunctionalState NewState)
   */
 void TIM1_ClearFlag(TIM1_FLAG_TypeDef TIM1_FLAG)
 {
-  /* Check the parameters */
-  assert_param(IS_TIM1_CLEAR_FLAG_OK(TIM1_FLAG));
-  
   /* Clear the flags (rc_w0) clear this bit by writing 0. Writing 1 has no effect*/
   TIM1->SR1 = (uint8_t)(~(uint8_t)(TIM1_FLAG));
   TIM1->SR2 = (uint8_t)((uint8_t)(~((uint8_t)((uint16_t)TIM1_FLAG >> 8))) & 
