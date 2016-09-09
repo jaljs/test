@@ -64,3 +64,27 @@ void GPIO_Init(GPIO_TypeDef* GPIOx, GPIO_Pin_TypeDef GPIO_Pin, GPIO_Mode_TypeDef
     GPIOx->CR2 &= (uint8_t)(~(GPIO_Pin));
   }
 }
+
+/**
+  * @brief  Writes reverse level to the specified GPIO pins.
+  * @note   The port must be configured in output mode.
+  * @param  GPIOx : Select the GPIO peripheral number (x = A to I).
+  * @param  PortPins : Specifies the pins to be reversed to the port output.
+  *         data register.
+  * @retval None
+  */
+void GPIO_WriteReverse(GPIO_TypeDef* GPIOx, GPIO_Pin_TypeDef PortPins)
+{
+  GPIOx->ODR ^= (uint8_t)PortPins;
+}
+
+/**
+  * @brief  Reads the specified GPIO input data port.
+  * @note   The port must be configured in input mode.   
+  * @param  GPIOx : Select the GPIO peripheral number (x = A to I).
+  * @retval GPIO input data port value.
+  */
+uint8_t GPIO_ReadInputData(GPIO_TypeDef* GPIOx)
+{
+  return ((uint8_t)GPIOx->IDR);
+}
