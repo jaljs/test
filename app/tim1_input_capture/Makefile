@@ -1,16 +1,16 @@
 SDCC=sdcc
 SDLD=sdld
-INCLUDE=-I../../include -I./ -I../../lib
+INCLUDE=-I../../include/stm8s -I./ -I../../lib
 CFLAGS=$(INCLUDE) -mstm8 --opt-code-size
 LDFLAGS=-lstm8
 
 .PHONY: all clean flash
 
 all:
-	$(SDCC) -c ../../drivers/stm8s_gpio.c $(CFLAGS) $(LDFLAGS)
-	$(SDCC) -c ../../drivers/stm8s_clk.c $(CFLAGS) $(LDFLAGS)
-	$(SDCC) -c ../../drivers/stm8s_tim1.c $(CFLAGS) $(LDFLAGS)
-	$(SDCC) -c ../../drivers/stm8s_uart1.c $(CFLAGS) $(LDFLAGS)
+	$(SDCC) -c ../../drivers/stm8s/stm8s_gpio.c $(CFLAGS) $(LDFLAGS)
+	$(SDCC) -c ../../drivers/stm8s/stm8s_clk.c $(CFLAGS) $(LDFLAGS)
+	$(SDCC) -c ../../drivers/stm8s/stm8s_tim1.c $(CFLAGS) $(LDFLAGS)
+	$(SDCC) -c ../../drivers/stm8s/stm8s_uart1.c $(CFLAGS) $(LDFLAGS)
 	$(SDCC) -c ../../lib/printf.c $(CFLAGS) $(LDFLAGS)
 	$(SDCC) -c main.c $(CFLAGS) $(LDFLAGS)
 	$(SDCC) main.rel printf.rel stm8s_gpio.rel stm8s_clk.rel stm8s_tim1.rel stm8s_uart1.rel $(CFLAGS) $(LDFLAGS)
