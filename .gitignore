@@ -1,0 +1,9 @@
+*.asm
+*.sym
+*.lst
+*.rel
+*.ihx
+*.map
+*.lk
+*.rst
+stm8flash
