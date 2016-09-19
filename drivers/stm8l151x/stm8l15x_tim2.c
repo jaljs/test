@@ -101,7 +101,7 @@
   */
 
 /* Includes ------------------------------------------------------------------*/
-#include "stm8l15x_TIM2.h"
+#include "stm8l15x_tim2.h"
 
 /** @addtogroup STM8L15x_StdPeriph_Driver
   * @{
