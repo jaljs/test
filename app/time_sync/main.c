@@ -6,6 +6,7 @@
 #include "stm8l15x_clk.h"
 #include "stm8l15x_tim2.h"
 #include "stm8l15x_exti.h"
+#include "stm8l15x_itc.h"
 
 #define GPIO_LED_PORT (GPIOA)
 #define GPIO_LED_PIN  (GPIO_Pin_4 | GPIO_Pin_5 | GPIO_Pin_6 | GPIO_Pin_7)
@@ -79,6 +80,9 @@ static void initialize(void)
 {
   sys_clk_high = 0;
   state = State_Calc_Falling_Edge_1;
+
+  /* Set Find Discovery Win interrupt to the highest priority */
+  ITC_SetSoftwarePriority(EXTI7_IRQn, ITC_PriorityLevel_3);
 }
 
 static uint32_t clk_diff(uint32_t current, uint32_t last)

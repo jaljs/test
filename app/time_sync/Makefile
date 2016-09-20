@@ -12,8 +12,9 @@ all:
 	$(SDCC) -c ../../drivers/stm8l151x/stm8l15x_tim2.c $(CFLAGS) $(LDFLAGS)
 	$(SDCC) -c ../../drivers/stm8l151x/stm8l15x_usart.c $(CFLAGS) $(LDFLAGS)
 	$(SDCC) -c ../../drivers/stm8l151x/stm8l15x_exti.c $(CFLAGS) $(LDFLAGS)
+	$(SDCC) -c ../../drivers/stm8l151x/stm8l15x_itc.c $(CFLAGS) $(LDFLAGS)
 	$(SDCC) -c main.c $(CFLAGS) $(LDFLAGS)
-	$(SDCC) main.rel stm8l15x_gpio.rel stm8l15x_clk.rel stm8l15x_tim2.rel stm8l15x_usart.rel stm8l15x_exti.rel $(CFLAGS) $(LDFLAGS)
+	$(SDCC) main.rel stm8l15x_gpio.rel stm8l15x_clk.rel stm8l15x_tim2.rel stm8l15x_usart.rel stm8l15x_exti.rel stm8l15x_itc.rel $(CFLAGS) $(LDFLAGS)
 
 clean:
 	rm -rf *.asm *.sym *.lst *.rel *.ihx *.map *.lk *.rst
