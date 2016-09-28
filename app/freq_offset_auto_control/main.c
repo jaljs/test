@@ -227,9 +227,9 @@ void main(void)
   DAC_Config();
   TIM1_Config();
   DAC_SetChannel1Data(DAC_Align_12b_R, 1878);
-  while (cmd_read_device_type() == UAV_DEVICE_TYPE_UNKNOWN); /* wait until c8800 uart initialized */
+//  while (cmd_read_device_type() == UAV_DEVICE_TYPE_UNKNOWN); /* wait until c8800 uart initialized */
   
-  if (cmd_read_device_type() == UAV_DEVICE_TYPE_GROUND) {
+//  if (cmd_read_device_type() == UAV_DEVICE_TYPE_GROUND) {
   while (1)
   {
   #if 1
