@@ -6,6 +6,8 @@
 #include "stm8l15x_tim3.h"
 #include "stm8l15x_exti.h"
 #include "stm8l15x_itc.h"
+#include "stm8l15x_dac.h"
+#include "stm8l15x_syscfg.h"
 
 #define GPIO_LED_PORT (GPIOA)
 #define GPIO_LED_PIN  (GPIO_Pin_4 | GPIO_Pin_5 | GPIO_Pin_6 | GPIO_Pin_7)
@@ -32,6 +34,7 @@ static uint32_t last_clk_count;
 static void Delay(uint32_t nCount);
 static void enable_interrupts(void);
 static uint32_t clk_diff(uint32_t current, uint32_t last);
+static void DAC_Config(void);
 
 static void CLK_Config(void);
 static void GPIO_Config(void);
@@ -47,7 +50,8 @@ void main(void)
   GPIO_Config();
   TIM2_Config();
   TIM3_Config();
-
+  DAC_Config();
+  DAC_SetChannel1Data(DAC_Align_12b_R, 1878);
   initialize();
 
   enable_interrupts();
@@ -112,6 +116,33 @@ static void CLK_Config(void)
 
   /* Enable TIM3 clock */
   CLK_PeripheralClockConfig(CLK_Peripheral_TIM3, ENABLE);
+
+  /* Enable Clocks of DAC */
+  CLK_PeripheralClockConfig(CLK_Peripheral_DAC, ENABLE);
+  CLK_PeripheralClockConfig(CLK_Peripheral_COMP, ENABLE);
+}
+
+static void DAC_Config(void)
+{
+  /* DAC Channel1 Config: 12bit right ----------------------------------------*/
+  /* DAC deinitialize */
+  DAC_DeInit();
+  
+  /* Fill DAC Init param DAC_Trigger_T4_TRGO and  DAC Channel1 Init */
+  DAC_Init(DAC_Channel_1, DAC_Trigger_None, DAC_OutputBuffer_Disable);
+  SYSCFG_RIDeInit();
+  // RI->IOSR2 = RI_IOSR2_CH14E;
+  //RI->IOSR1 = RI_IOSR1_CH13E;
+   //RI->IOSR3 = RI_IOSR3_CH15E;
+  //SYSCFG_RIIOSwitchConfig(RI_IOSwitch_13, ENABLE);
+  //SYSCFG_RIIOSwitchConfig(RI_IOSwitch_14, ENABLE);
+  SYSCFG_RIIOSwitchConfig(RI_IOSwitch_15, ENABLE);
+  RI->IOCMR1 = 0x10;
+  /* Enable DAC Channel1 */
+  DAC_Cmd(DAC_Channel_1, ENABLE);
+  
+  /* Enable DMA for DAC Channel1 */
+  DAC_DMACmd(DAC_Channel_1, DISABLE);
 }
 
 static void gpio_tx_win_out_generate_one_pulse(uint16_t micro_second)
