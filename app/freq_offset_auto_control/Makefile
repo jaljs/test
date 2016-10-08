@@ -1,8 +1,7 @@
 SDCC=sdcc
 SDLD=sdld
 INCLUDE=-I../../include/stm8l151x -I./ -I../../lib
-#CFLAGS=$(INCLUDE) -mstm8 --opt-code-size
-CFLAGS=$(INCLUDE) -mstm8
+CFLAGS=$(INCLUDE) -mstm8 --opt-code-size
 LDFLAGS=-lstm8
 
 .PHONY: all clean flash

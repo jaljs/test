@@ -222,6 +222,8 @@ void main(void)
   uint8_t index_list[13];
   int i, j;
   CLK_Config();
+  for (i = 0; i < 50; i++)
+    Delay_100ms();
   GPIO_Config();
   USART_Config();
   DAC_Config();
@@ -234,37 +236,45 @@ void main(void)
   {
   #if 1
     if (cmd_query_online() == 0) {
+      int dsm_changed_times;
       cmd_set_led(UART_CMD_LED_SET_DSM);
-      if (cmd_query_dsm_change() == 0) {
-        for (i = 0; i <= 12; i++)
-             index_list[i] = 0;
+      dsm_changed_times = 0;
+      while (1) {
+        if (cmd_query_dsm_change() == 0) {
+          for (i = 0; i <= 12; i++)
+               index_list[i] = 0;
 
-        j = 0;
-        for (i = 0; i <= 12; i++) {
-          uint16_t val1, val2;
-          // Ref: 3.27V
-          // Minial Voltage Move 0.15Hz
-          // 5Hz / 0.15 = 33.3333
-          // 1878 = 1.5 * 4095 / 3.27
-          // 200 = 33.3333 * 6
-          DAC_SetChannel1Data(DAC_Align_12b_R, 1878 + 200 - i*33);
+          j = 0;
+          for (i = 0; i <= 12; i++) {
+            uint16_t val1, val2;
+            // Ref: 3.27V
+            // Minial Voltage Move 0.15Hz
+            // 5Hz / 0.15 = 33.3333
+            // 1878 = 1.5 * 4095 / 3.27
+            // 200 = 33.3333 * 6
+            DAC_SetChannel1Data(DAC_Align_12b_R, 1878 + 200 - i*33);
 
-          val1 = TIM1_GetCounter();
-          Delay_100ms();
-          Delay_100ms();
-          val2 = TIM1_GetCounter();
-          if (val1 != val2) {
-             index_list[j++] = i;
+            val1 = TIM1_GetCounter();
+            Delay_100ms();
+            Delay_100ms();
+            val2 = TIM1_GetCounter();
+            if (val1 != val2) {
+               index_list[j++] = i;
+            }
           }
-        }
 
-        if (j == 0) {
-          // recover to 1.5V
-          DAC_SetChannel1Data(DAC_Align_12b_R, 1878);
+          if (j == 0) {
+            // recover to 1.5V
+            DAC_SetChannel1Data(DAC_Align_12b_R, 1878);
+          } else {
+            // find middle index
+            i = index_list[j/2];
+            DAC_SetChannel1Data(DAC_Align_12b_R, 1878 + 200 - i*33);
+          }
         } else {
-          // find middle index
-          i = index_list[j/2];
-          DAC_SetChannel1Data(DAC_Align_12b_R, 1878 + 200 - i*33);
+          dsm_changed_times++; 
+          if (dsm_changed_times > 10)
+            break;
         }
       }
     } else {
