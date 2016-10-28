@@ -90,6 +90,11 @@ static int cmd_query_dsm_change(void)
   val1 = TIM1_GetCounter();
   Delay_100ms();
   Delay_100ms();
+  Delay_100ms();
+  Delay_100ms();
+  Delay_100ms();
+  Delay_100ms();
+  Delay_100ms();
   val2 = TIM1_GetCounter();
   if (val1 == val2)
     return 0;
@@ -240,6 +245,7 @@ void main(void)
       cmd_set_led(UART_CMD_LED_SET_DSM);
       dsm_changed_times = 0;
       while (1) {
+        //if (cmd_query_dsm_change() == 0 && cmd_query_dsm_change() == 0 && cmd_query_dsm_change() == 0) {
         if (cmd_query_dsm_change() == 0) {
           for (i = 0; i <= 12; i++)
                index_list[i] = 0;
@@ -273,7 +279,7 @@ void main(void)
           }
         } else {
           dsm_changed_times++; 
-          if (dsm_changed_times > 10)
+          if (dsm_changed_times > 3)
             break;
         }
       }
