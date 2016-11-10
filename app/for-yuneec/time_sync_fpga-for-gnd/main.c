@@ -105,8 +105,13 @@ static void USART_Config(void)
 static void TIM1_Config(void)
 {
   TIM1_TimeBaseInit(TIM1_Prescaler_1, TIM1_CounterMode_Up, 0xFFFF, 0);
+
+	// PD3
+	//GPIO_Init(GPIOD, GPIO_Pin_3, GPIO_Mode_In_FL_No_IT);
   TIM1_ETRClockMode2Config(TIM1_ExtTRGPSC_OFF, TIM1_ExtTRGPolarity_NonInverted, 0);
   TIM1_SelectInputTrigger(TIM1_TRGSelection_ETRF);
+
+	// PD2
   //TIM1_TIxExternalClockConfig(TIM1_TIxExternalCLK1Source_TI1, TIM1_ICPolarity_Rising, 0);
   TIM1_Cmd(ENABLE);
 }
@@ -144,6 +149,7 @@ static void send_cmd(char cmd)
 static int cmd_query_dsm_change(void)
 {
   uint16_t val1, val2;
+  cmd_set_led(UART_CMD_LED_SET_DSM);
   val1 = TIM1_GetCounter();
   Delay_100ms();
   Delay_100ms();
@@ -153,10 +159,11 @@ static int cmd_query_dsm_change(void)
   Delay_100ms();
   Delay_100ms();
   val2 = TIM1_GetCounter();
-  if (val1 == val2)
+  if (val1 == val2) {
     return 0;
-  else
+  } else {
     return 1;
+	}
 }
 
 static int cmd_query_online(void)
@@ -170,17 +177,26 @@ static int cmd_query_online(void)
     return 0;
 }
 
+static int device_type = UAV_DEVICE_TYPE_UNKNOWN;
+
 static int cmd_read_device_type(void)
 {
   char ch;
+
+  if (device_type != UAV_DEVICE_TYPE_UNKNOWN)
+    return device_type;
+
   send_cmd(UART_CMD_READ_DEVICE_TYPE);
   ch = getchar();
-  if (ch == GROUND)
+  if (ch == GROUND) {
+    device_type = UAV_DEVICE_TYPE_GROUND;
     return UAV_DEVICE_TYPE_GROUND;
-  else if (ch == SKY)
+  } else if (ch == SKY) {
+    device_type = UAV_DEVICE_TYPE_SKY;
     return UAV_DEVICE_TYPE_SKY;
-  else
+  } else {
     return UAV_DEVICE_TYPE_UNKNOWN;
+  }
 }
 
 static int cmd_set_led(char cmd)
@@ -211,6 +227,10 @@ void main(void)
   uint8_t index_list[13];
   int i, j;
   CLK_Config();
+
+  /* GPIO PD0 */
+  GPIO_Init(GPIOD, GPIO_Pin_0, GPIO_Mode_Out_PP_High_Fast);
+
   for (i = 0; i < 50; i++)
     Delay_100ms();
   GPIO_Config();
@@ -223,18 +243,17 @@ void main(void)
   DAC_SetChannel1Data(DAC_Align_12b_R, 1878);
 
   enable_interrupts();
-//  while (cmd_read_device_type() == UAV_DEVICE_TYPE_UNKNOWN); /* wait until c8800 uart initialized */
-  
-//  if (cmd_read_device_type() == UAV_DEVICE_TYPE_GROUND) {
+
   while (1)
   {
   #if 1
+    /* skip sky auto freq offset */
+    if (cmd_read_device_type() == UAV_DEVICE_TYPE_SKY) continue;
+
     if (cmd_query_online() == 0) {
       int dsm_changed_times;
-      cmd_set_led(UART_CMD_LED_SET_DSM);
       dsm_changed_times = 0;
       while (1) {
-        //if (cmd_query_dsm_change() == 0 && cmd_query_dsm_change() == 0 && cmd_query_dsm_change() == 0) {
         if (cmd_query_dsm_change() == 0) {
           for (i = 0; i <= 12; i++)
                index_list[i] = 0;
@@ -252,6 +271,7 @@ void main(void)
             val1 = TIM1_GetCounter();
             Delay_100ms();
             Delay_100ms();
+            Delay_100ms();
             val2 = TIM1_GetCounter();
             if (val1 != val2) {
                index_list[j++] = i;
@@ -259,8 +279,7 @@ void main(void)
           }
 
           if (j == 0) {
-            // recover to 1.5V
-            DAC_SetChannel1Data(DAC_Align_12b_R, 1878);
+						/* DO Nothng */
           } else {
             // find middle index
             i = index_list[j/2];
@@ -268,13 +287,19 @@ void main(void)
           }
         } else {
           dsm_changed_times++; 
-          if (dsm_changed_times > 3)
+          if (dsm_changed_times > 3) {
+      			cmd_set_led(UART_CMD_LED_SET_ERROR);
             break;
+					}
         }
       }
-    } else {
-      cmd_set_led(UART_CMD_LED_SET_ERROR);
     }
+
+  	Delay_100ms();
+  	Delay_100ms();
+  	Delay_100ms();
+  	Delay_100ms();
+  	Delay_100ms();
    #else
    // Delay_100ms();
    // GPIO_ToggleBits(GPIO_LED_PORT, GPIO_LED_PIN);
@@ -284,8 +309,6 @@ void main(void)
    //cmd_query_online();
    #endif
   }
-  //}
-
 }
 
 static void Delay(uint32_t nCount)
