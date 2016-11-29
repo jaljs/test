@@ -10,8 +10,10 @@
 #include "stm8l15x_dac.h"
 #include "stm8l15x_syscfg.h"
 
+#if defined(LED)
 #define GPIO_LED_PORT (GPIOA)
 #define GPIO_LED_PIN  (GPIO_Pin_4 | GPIO_Pin_5 | GPIO_Pin_6 | GPIO_Pin_7)
+#endif
 #define TIM2_PERIOD 0xFFFF
 
 #define GPIO_TX_WIN_IN_PORT GPIOB
@@ -228,7 +230,7 @@ void main(void)
   int i, j;
   CLK_Config();
 
-  /* GPIO PD0 */
+  /* GPIO PD0 (MASTER/SLAVE) */
   GPIO_Init(GPIOD, GPIO_Pin_0, GPIO_Mode_Out_PP_High_Fast);
 
   for (i = 0; i < 50; i++)
@@ -333,6 +335,9 @@ static void initialize(void)
 
   /* Set TIM3 generate pulse routine to the lowest priority */
   ITC_SetSoftwarePriority(TIM3_CC_IRQn, ITC_PriorityLevel_2);
+
+	/* Set RF ATTENNA switch routine to the lowest priority */
+  ITC_SetSoftwarePriority(EXTI4_IRQn, ITC_PriorityLevel_3);
 }
 
 static uint32_t clk_diff(uint32_t current, uint32_t last)
@@ -345,8 +350,10 @@ static uint32_t clk_diff(uint32_t current, uint32_t last)
 
 static void GPIO_Config(void)
 {
+	#if defined(LED)
   /* LED */
   GPIO_Init(GPIO_LED_PORT, GPIO_LED_PIN, GPIO_Mode_Out_PP_Low_Fast);
+	#endif
 
   /* Tx WIN Output */
   GPIO_Init(GPIO_TX_WIN_OUT_PORT, GPIO_TX_WIN_OUT_PIN, GPIO_Mode_Out_PP_Low_Fast);
@@ -354,6 +361,13 @@ static void GPIO_Config(void)
   /* Tx WIN Input (Interrupt) */
   GPIO_Init(GPIO_TX_WIN_IN_PORT, GPIO_TX_WIN_IN_PIN, GPIO_Mode_In_FL_IT);
   EXTI_SetPinSensitivity(EXTI_Pin_1, EXTI_Trigger_Falling);
+
+	/* RF ATTENNA switch (C8800 -> MCU) */
+  GPIO_Init(GPIOA, GPIO_Pin_4, GPIO_Mode_In_PU_IT);
+  EXTI_SetPinSensitivity(EXTI_Pin_4, EXTI_Trigger_Rising_Falling);
+
+	/* RF ATTENNA PB2 Low: RF1 High: RF2 */
+  GPIO_Init(GPIOB, GPIO_Pin_2, GPIO_Mode_Out_PP_Low_Fast);
 }
 
 static void CLK_Config(void)
@@ -468,7 +482,9 @@ void exti1_isr(void) __interrupt(9)
     */
     curr_clk_diff = clk_diff(clk_count, last_clk_count);
     if (curr_clk_diff > last_clk_diff && ((curr_clk_diff - last_clk_diff) > 100)) {
+			 #if defined(LED)
        GPIO_ToggleBits(GPIO_LED_PORT, GPIO_LED_PIN);
+			 #endif
 
        /* TODO Trigger Discovery Event (4ms) */
 
@@ -487,6 +503,21 @@ void exti1_isr(void) __interrupt(9)
   last_clk_count = clk_count;
 
   EXTI_ClearITPendingBit(EXTI_IT_Pin1);
+}
+
+/* EXTI4 GPIOA Pin_4 */
+void exti4_isr(void) __interrupt(12)
+{
+	BitStatus bit = GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_4);
+	if (bit == 0) {
+		/* ATTENNA 1 */
+		GPIO_ResetBits(GPIOB, GPIO_Pin_2);
+	} else {
+		/* ATTENNA 2 */
+		GPIO_SetBits(GPIOB, GPIO_Pin_2);
+	}
+
+  EXTI_ClearITPendingBit(EXTI_IT_Pin4);
 }
 
 void tim2_upd_ovf(void) __interrupt(19)
