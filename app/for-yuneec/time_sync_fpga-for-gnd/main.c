@@ -192,7 +192,8 @@ static void send_cmd(char cmd)
 static int cmd_query_dsm_change(void)
 {
   uint16_t val1, val2;
-  cmd_set_led(UART_CMD_LED_SET_DSM);
+  if (cmd_set_led(UART_CMD_LED_SET_DSM) == 2)
+		return 2;
   val1 = TIM1_GetCounter();
   Delay_100ms();
   Delay_100ms();
@@ -323,8 +324,8 @@ void main(void)
   /* GPIO PD0 (MASTER/SLAVE) */
   GPIO_Init(GPIOD, GPIO_Pin_0, GPIO_Mode_Out_PP_High_Fast);
 
-  for (i = 0; i < 50; i++)
-    Delay_100ms();
+  //for (i = 0; i < 50; i++)
+   // Delay_100ms();
   GPIO_Config();
   USART_Config();
   DAC_Config();
@@ -353,7 +354,8 @@ void main(void)
       int dsm_changed_times;
       dsm_changed_times = 0;
       while (1) {
-        if (cmd_query_dsm_change() == 0) {
+				int val = cmd_query_dsm_change();
+        if (val == 0) {
           for (i = 0; i <= 12; i++)
                index_list[i] = 0;
 
@@ -384,13 +386,16 @@ void main(void)
             i = index_list[j/2];
             DAC_SetChannel1Data(DAC_Align_12b_R, 1878 + 200 - i*33);
           }
-        } else {
+        } else if (val == 1) {
           dsm_changed_times++; 
           if (dsm_changed_times > 3) {
       			cmd_set_led(UART_CMD_LED_SET_ERROR);
             break;
 					}
-        }
+        } else {
+					/* UART ERROR: break directly */
+					break;
+				}
       }
     }
 
