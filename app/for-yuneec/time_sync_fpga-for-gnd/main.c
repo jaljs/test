@@ -29,16 +29,23 @@ enum {
 };
 
 static uint16_t sys_clk_high;
+static uint32_t failed_loop = 333;
 
 static uint8_t state;
 static uint32_t last_clk_diff;
 static uint32_t last_clk_count;
+static uint32_t current_tx_window_measure_time = 0;
+static uint32_t current_discovery_window_measure_time = 0;
 
 static void Delay(uint32_t nCount);
 static void enable_interrupts(void);
 static uint32_t clk_diff(uint32_t current, uint32_t last);
 static void DAC_Config(void);
 
+static uint8_t lockbit = 0;
+static void lock(void);
+static void unlock(void);
+static uint8_t trylock(void);
 static void CLK_Config(void);
 static void GPIO_Config(void);
 static void TIM2_Config(void);
@@ -47,6 +54,20 @@ static void gpio_tx_win_out_generate_one_pulse(uint16_t micro_second);
 
 static void initialize(void);
 
+static const char cb64[]="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+/*
+** encodeblock
+**
+** encode 3 8-bit binary bytes as 4 '6-bit' characters
+*/
+static void encodeblock( unsigned char *in, unsigned char *out, int len )
+{
+    out[0] = (unsigned char) cb64[ (int)(in[0] >> 2) ];
+    out[1] = (unsigned char) cb64[ (int)(((in[0] & 0x03) << 4) | ((in[1] & 0xf0) >> 4)) ];
+    out[2] = (unsigned char) (len > 1 ? cb64[ (int)(((in[1] & 0x0f) << 2) | ((in[2] & 0xc0) >> 6)) ] : '=');
+    out[3] = (unsigned char) (len > 2 ? cb64[ (int)(in[2] & 0x3f) ] : '=');
+}
 
 /******************************************/
 /* Auto Freq Offest */
@@ -57,6 +78,7 @@ static void initialize(void);
 #define UART_CMD_QUERY_DSM_CHANGE 'E'
 #define UART_CMD_READ_FREQ_OFFSET 'F'
 #define UART_CMD_READ_DEVICE_TYPE 'G'
+#define UART_CMD_REPORT_DBA       'H'
 
 #define GROUND '1'
 #define SKY '0'
@@ -75,6 +97,26 @@ static void send_cmd(char cmd);
 static int cmd_query_online(void);
 static int cmd_set_led(char cmd);
 static uint16_t cmd_get_freq_offset(void);
+static void cmd_report_tx_discovery_window_measure_time(void);
+
+static void lock(void)
+{
+	lockbit = 1;
+}
+
+static void unlock(void)
+{
+	lockbit = 0;
+}
+
+static uint8_t trylock(void)
+{
+	if (lockbit == 0) {
+		lockbit = 1;
+		return 1;
+	}
+	return 0;
+}
 
 static void Delay_100ms()
 {
@@ -128,14 +170,13 @@ static void putchar(uint8_t c)
 static uint8_t getchar(void)
 {
   int c = 0;
-  uint32_t failed_loop;
 
   failed_loop = 0;
   /* Loop until the Read data register flag is SET */
-  while (USART_GetFlagStatus(USART1, USART_FLAG_RXNE) == RESET) {
-//    failed_loop++;
-//    if (failed_loop > 0xFFFF)
-//      return 'E';
+  while(USART_GetFlagStatus(USART1, USART_FLAG_RXNE) == RESET) {
+			failed_loop++;
+			if (failed_loop > 0xFFFF)
+      	return 'E';
   }
   c = USART_ReceiveData8(USART1);
   return (c);
@@ -173,10 +214,52 @@ static int cmd_query_online(void)
   char ch;
   send_cmd(UART_CMD_QUERY_ONLINE);
   ch = getchar();
-  if (ch == '1')
-    return 1;
-  else
+  if (ch == 'E')
+    return 2;
+  else if (ch == '1')
+		return 1;
+	else
     return 0;
+}
+
+static void cmd_report_tx_discovery_window_measure_time(void)
+{
+	uint32_t t, d;
+	unsigned char in[8];
+	int i;
+
+	lock();
+	putchar('^');
+	putchar(UART_CMD_REPORT_DBA);
+	//t = failed_loop;
+	t = current_tx_window_measure_time;
+	d = current_discovery_window_measure_time;
+
+	in[0] = (t >> 24) & 0xFF;
+	in[1] = (t >> 16) & 0xFF;
+	in[2] = (t >> 8) & 0xFF;
+	in[3] = (t) & 0xFF;
+	in[4] = (d >> 24) & 0xFF;
+	in[5] = (d >> 16) & 0xFF;
+	in[6] = (d >> 8) & 0xFF;
+	in[7] = (d) & 0xFF;
+
+	/* base64 encodec */
+	for (i = 0; i < 8; i+=3) {
+		unsigned char t_in[3];
+		unsigned char t_out[4];
+		t_in[0] = in[i];
+		t_in[1] = i+1 >= 8? 0: in[i+1];
+		t_in[2] = i+2 >= 8? 0: in[i+2];
+		encodeblock(t_in, t_out, 3);
+		putchar(t_out[0]);
+		putchar(t_out[1]);
+		putchar(t_out[2]);
+		putchar(t_out[3]);
+	}
+
+	putchar('$');
+	unlock();
 }
 
 static int device_type = UAV_DEVICE_TYPE_UNKNOWN;
@@ -190,7 +273,9 @@ static int cmd_read_device_type(void)
 
   send_cmd(UART_CMD_READ_DEVICE_TYPE);
   ch = getchar();
-  if (ch == GROUND) {
+	if (ch == 'E') {
+		return UAV_DEVICE_TYPE_UNKNOWN;
+	} else if (ch == GROUND) {
     device_type = UAV_DEVICE_TYPE_GROUND;
     return UAV_DEVICE_TYPE_GROUND;
   } else if (ch == SKY) {
@@ -206,7 +291,9 @@ static int cmd_set_led(char cmd)
   char ch;
   send_cmd(cmd);
   ch = getchar();
-  if (ch == 'O')
+	if (ch == 'E')
+		return 2;
+  else if (ch == 'O')
     return 1;
   else
     return 0;
@@ -217,7 +304,10 @@ static uint16_t cmd_get_freq_offset(void)
   uint8_t val1, val2;
   val1 = getchar();
   val2 = getchar();
-  return (val1 << 8) | val2;
+	if (val1 == 'E' || val2 == 'E')
+		return 0xFFFF;
+	else
+  	return (val1 << 8) | val2;
 }
 
 /******************************************/
@@ -250,9 +340,16 @@ void main(void)
   {
   #if 1
     /* skip sky auto freq offset */
-    if (cmd_read_device_type() == UAV_DEVICE_TYPE_SKY) continue;
+  	Delay_100ms();
+  	Delay_100ms();
+  	Delay_100ms();
+		cmd_report_tx_discovery_window_measure_time();
+  	Delay_100ms();
+  	Delay_100ms();
+    if (cmd_read_device_type() != UAV_DEVICE_TYPE_GROUND) continue;
 
     if (cmd_query_online() == 0) {
+
       int dsm_changed_times;
       dsm_changed_times = 0;
       while (1) {
@@ -297,11 +394,6 @@ void main(void)
       }
     }
 
-  	Delay_100ms();
-  	Delay_100ms();
-  	Delay_100ms();
-  	Delay_100ms();
-  	Delay_100ms();
    #else
    // Delay_100ms();
    // GPIO_ToggleBits(GPIO_LED_PORT, GPIO_LED_PIN);
@@ -332,6 +424,9 @@ static void initialize(void)
 
   /* Set Find Discovery Win interrupt to the highest priority */
   ITC_SetSoftwarePriority(EXTI1_IRQn, ITC_PriorityLevel_3);
+
+  /* Set TIM3 generate pulse routine to the lowest priority */
+  //ITC_SetSoftwarePriority(TIM2_UPD_OVF_TRG_BRK_IRQn, ITC_PriorityLevel_3);
 
   /* Set TIM3 generate pulse routine to the lowest priority */
   ITC_SetSoftwarePriority(TIM3_CC_IRQn, ITC_PriorityLevel_2);
@@ -459,11 +554,43 @@ static void TIM3_Config(void)
   TIM3_Cmd(DISABLE);
 }
 
+uint8_t update_tx_discovery_measure_time(uint32_t t, uint32_t d)
+{
+	uint8_t valid = 0;
+	uint32_t tmp;
+	if (trylock() == 1) {
+   	/* TODO Trigger Discovery Event (4ms) */
+	  if ((t > 20000 && t < 30000) && (d > 30000 && d < 40000)) {
+			if (current_tx_window_measure_time == 0) {
+	 			current_tx_window_measure_time = t;
+			} else {
+				tmp = current_tx_window_measure_time + t;
+				current_tx_window_measure_time = tmp / 2;
+			}
+
+			if (current_discovery_window_measure_time == 0) {
+	 			current_discovery_window_measure_time = d;
+			} else {
+	 			tmp = current_discovery_window_measure_time + d;
+				current_discovery_window_measure_time = tmp / 2;
+			}
+
+			valid = 1;
+		}
+	  unlock();
+	}
+	return valid;
+}
+
+static uint8_t exti1_lock = 0;
+
 /* EXTI1 GPIOB Pin_1 -> Tx Win Input */
 void exti1_isr(void) __interrupt(9)
 {
   uint32_t curr_clk_diff;
   uint32_t clk_count;
+
+	exti1_lock = 1;
 
   gpio_tx_win_out_generate_one_pulse(2000); /* 1ms */
 
@@ -481,16 +608,17 @@ void exti1_isr(void) __interrupt(9)
        100 -> 100us
     */
     curr_clk_diff = clk_diff(clk_count, last_clk_count);
-    if (curr_clk_diff > last_clk_diff && ((curr_clk_diff - last_clk_diff) > 100)) {
+    if (curr_clk_diff > last_clk_diff && ((curr_clk_diff - last_clk_diff) > 1000)) {
 			 #if defined(LED)
        GPIO_ToggleBits(GPIO_LED_PORT, GPIO_LED_PIN);
 			 #endif
 
-       /* TODO Trigger Discovery Event (4ms) */
+			 update_tx_discovery_measure_time(last_clk_diff, curr_clk_diff);
 
        state = State_Calc_Falling_Edge_1;
        clk_count = 0;
-    } else if (curr_clk_diff < last_clk_diff && ((last_clk_diff - curr_clk_diff) > 100)) {
+    } else if (curr_clk_diff < last_clk_diff && ((last_clk_diff - curr_clk_diff) > 1000)) {
+			update_tx_discovery_measure_time(curr_clk_diff, last_clk_count);
       state = State_Calc_Falling_Edge_1;
       clk_count = 0;
     } else {
