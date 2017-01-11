@@ -346,6 +346,7 @@ void main(void)
 {
   uint16_t current_freq_offset;
   uint32_t current_voltage_value = 1878;
+	uint32_t last_freq_offset_voltage = current_voltage_value;
   int i;
   CLK_Config();
 
@@ -386,12 +387,15 @@ void main(void)
         if (val == 0) {
           for (i = 0; i <= 12; i++) {
             uint16_t val1, val2;
+						uint16_t next_voltage;
             // Ref: 3.27V
             // Minial Voltage Move 0.15Hz
             // 5Hz / 0.15 = 33.3333
             // 1878 = 1.5 * 4095 / 3.27
             // 200 = 33.3333 * 6
-						current_voltage_value = 1878 + 200 - i*33;
+						next_voltage = last_freq_offset_voltage + (i % 2 == 0? (i/2) * 33 : -1 * (i+1)/2 * 33);
+						//current_voltage_value = 1878 + 200 - i*33;
+						current_voltage_value = next_voltage;
             DAC_SetChannel1Data(DAC_Align_12b_R, current_voltage_value);
 
             val1 = TIM1_GetCounter();
@@ -404,6 +408,7 @@ void main(void)
 						 	if (u == 0xFFFF)
 						 		continue;
 						 	current_voltage_value = current_voltage_value + u;
+							last_freq_offset_voltage = current_voltage_value;
 						 	DAC_SetChannel1Data(DAC_Align_12b_R, current_voltage_value);
 						 	break;
             }
@@ -423,6 +428,7 @@ void main(void)
 			int16_t u = get_c8800_freq_offset();
 			if (u != 0xFFFF && u != 0) {
 				current_voltage_value = current_voltage_value + u;
+				last_freq_offset_voltage = current_voltage_value;
 				DAC_SetChannel1Data(DAC_Align_12b_R, current_voltage_value);
 			}
 		}
