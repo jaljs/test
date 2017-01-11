@@ -347,6 +347,7 @@ void main(void)
   uint16_t current_freq_offset;
   uint32_t current_voltage_value = 1878;
 	uint32_t last_freq_offset_voltage = current_voltage_value;
+	uint32_t first_bootstrap = 1;
   int i;
   CLK_Config();
 
@@ -393,8 +394,11 @@ void main(void)
             // 5Hz / 0.15 = 33.3333
             // 1878 = 1.5 * 4095 / 3.27
             // 200 = 33.3333 * 6
-						next_voltage = last_freq_offset_voltage + (i % 2 == 0? (i/2) * 33 : -1 * (i+1)/2 * 33);
-						//current_voltage_value = 1878 + 200 - i*33;
+						if (first_bootstrap) {
+							next_voltage = 1878 + 200 - i*33;
+						} else {
+							next_voltage = last_freq_offset_voltage + (i % 2 == 0? (i/2) * 33 : -1 * (i+1)/2 * 33);
+						}
 						current_voltage_value = next_voltage;
             DAC_SetChannel1Data(DAC_Align_12b_R, current_voltage_value);
 
@@ -410,6 +414,7 @@ void main(void)
 						 	current_voltage_value = current_voltage_value + u;
 							last_freq_offset_voltage = current_voltage_value;
 						 	DAC_SetChannel1Data(DAC_Align_12b_R, current_voltage_value);
+							first_bootstrap = 0;
 						 	break;
             }
           }
