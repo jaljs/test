@@ -305,6 +305,7 @@ static int cmd_set_led(char cmd)
 static uint16_t cmd_get_freq_offset(void)
 {
   uint8_t val1, val2;
+	send_cmd('F');
   val1 = getchar();
   val2 = getchar();
 	if (val1 == 'E' || val2 == 'E')
@@ -315,12 +316,37 @@ static uint16_t cmd_get_freq_offset(void)
 
 /******************************************/
 
+int16_t get_c8800_freq_offset()
+{
+	int is_negative;
+	uint16_t u = cmd_get_freq_offset();
+	uint32_t x;
+	if (u == 0xFFFF)
+		return 0xFFFF;
+	
+	is_negative = 0;
+	if (u & (1 << 14))
+		is_negative = 1;
+	
+	if (is_negative)
+		u = 0x3fff - (u & 0x3fff);
+	else
+		u = u & 0x3fff;
+	
+	x = u;
+	x = x * 1000 / 16 * 25 / 1000;
+	x = x / 15;
+	if (is_negative)
+		return x; /* if freq offset is negative, we should +x */
+	else
+		return -x;
+}
 
 void main(void)
 {
   uint16_t current_freq_offset;
-  uint8_t index_list[13];
-  int i, j;
+  uint32_t current_voltage_value = 1878;
+  int i;
   CLK_Config();
 
   /* GPIO PD0 (MASTER/SLAVE) */
@@ -335,7 +361,7 @@ void main(void)
   TIM2_Config();
   TIM3_Config();
   initialize();
-  DAC_SetChannel1Data(DAC_Align_12b_R, 1878);
+  DAC_SetChannel1Data(DAC_Align_12b_R, current_voltage_value);
 
   enable_interrupts();
 
@@ -358,10 +384,6 @@ void main(void)
       while (1) {
 				int val = cmd_query_dsm_change();
         if (val == 0) {
-          for (i = 0; i <= 12; i++)
-               index_list[i] = 0;
-
-          j = 0;
           for (i = 0; i <= 12; i++) {
             uint16_t val1, val2;
             // Ref: 3.27V
@@ -369,7 +391,8 @@ void main(void)
             // 5Hz / 0.15 = 33.3333
             // 1878 = 1.5 * 4095 / 3.27
             // 200 = 33.3333 * 6
-            DAC_SetChannel1Data(DAC_Align_12b_R, 1878 + 200 - i*33);
+						current_voltage_value = 1878 + 200 - i*33;
+            DAC_SetChannel1Data(DAC_Align_12b_R, current_voltage_value);
 
             val1 = TIM1_GetCounter();
             Delay_100ms();
@@ -377,16 +400,13 @@ void main(void)
             Delay_100ms();
             val2 = TIM1_GetCounter();
             if (val1 != val2) {
-               index_list[j++] = i;
+						 	int16_t u = get_c8800_freq_offset();
+						 	if (u == 0xFFFF)
+						 		continue;
+						 	current_voltage_value = current_voltage_value + u;
+						 	DAC_SetChannel1Data(DAC_Align_12b_R, current_voltage_value);
+						 	break;
             }
-          }
-
-          if (j == 0) {
-						/* DO Nothng */
-          } else {
-            // find middle index
-            i = index_list[j/2];
-            DAC_SetChannel1Data(DAC_Align_12b_R, 1878 + 200 - i*33);
           }
         } else if (val == 1) {
           dsm_changed_times++; 
@@ -399,7 +419,13 @@ void main(void)
 					break;
 				}
       }
-    }
+    } else {
+			int16_t u = get_c8800_freq_offset();
+			if (u != 0xFFFF && u != 0) {
+				current_voltage_value = current_voltage_value + u;
+				DAC_SetChannel1Data(DAC_Align_12b_R, current_voltage_value);
+			}
+		}
 
    #else
    // Delay_100ms();
