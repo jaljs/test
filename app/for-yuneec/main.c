@@ -403,13 +403,12 @@ void main(void)
     /* skip sky auto freq offset */
   	Delay_100ms();
   	Delay_100ms();
-  	Delay_100ms();
 		cmd_report_tx_discovery_window_measure_time();
   	Delay_100ms();
   	Delay_100ms();
-    if (cmd_read_device_type() != UAV_DEVICE_TYPE_GROUND) continue;
-
 		cmd_report_mcu_version();
+  	Delay_100ms();
+    if (cmd_read_device_type() != UAV_DEVICE_TYPE_GROUND) continue;
 
     if (cmd_query_online() == 0) {
 
