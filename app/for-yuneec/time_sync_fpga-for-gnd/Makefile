@@ -6,7 +6,7 @@ LDFLAGS=-lstm8
 
 .PHONY: all clean flash
 
-all:
+all: gen_mcu_version
 	$(SDCC) -c ../../../drivers/stm8l151x/stm8l15x_gpio.c $(CFLAGS) $(LDFLAGS)
 	$(SDCC) -c ../../../drivers/stm8l151x/stm8l15x_clk.c $(CFLAGS) $(LDFLAGS)
 	$(SDCC) -c ../../../drivers/stm8l151x/stm8l15x_tim1.c $(CFLAGS) $(LDFLAGS)
@@ -19,6 +19,18 @@ all:
 	$(SDCC) -c ../../../drivers/stm8l151x/stm8l15x_syscfg.c $(CFLAGS) $(LDFLAGS)
 	$(SDCC) -c main.c $(CFLAGS) $(LDFLAGS)
 	$(SDCC) main.rel stm8l15x_gpio.rel stm8l15x_clk.rel stm8l15x_tim1.rel stm8l15x_tim2.rel stm8l15x_tim3.rel stm8l15x_usart.rel stm8l15x_exti.rel stm8l15x_itc.rel stm8l15x_dac.rel stm8l15x_syscfg.rel $(CFLAGS) $(LDFLAGS)
+
+gen_mcu_version:
+	@echo Generate MCU Version HASH=$$(git show --pretty=format:%h HEAD | head -1)
+	@sed -e "s/<mcu_version_hash>/$$(git show --pretty=format:%h HEAD | head -1)/g" \
+		< version.h.in > version.h.tmp
+	@if diff -q version.h version.h.tmp > /dev/null 2>&1; \
+	then \
+		rm version.h.tmp* ;\
+	else \
+		echo "version.h.in => verson.h"; \
+		mv version.h.tmp version.h; \
+	fi
 
 clean:
 	rm -rf *.asm *.sym *.lst *.rel *.ihx *.map *.lk *.rst

@@ -9,6 +9,7 @@
 #include "stm8l15x_itc.h"
 #include "stm8l15x_dac.h"
 #include "stm8l15x_syscfg.h"
+#include "version.h"
 
 #if defined(LED)
 #define GPIO_LED_PORT (GPIOA)
@@ -81,6 +82,7 @@ static void encodeblock( unsigned char *in, unsigned char *out, int len )
 #define UART_CMD_READ_FREQ_OFFSET 'F'
 #define UART_CMD_READ_DEVICE_TYPE 'G'
 #define UART_CMD_REPORT_DBA       'H'
+#define UART_CMD_REPORT_MCU_VER   'I'
 
 #define GROUND '1'
 #define SKY '0'
@@ -265,6 +267,34 @@ static void cmd_report_tx_discovery_window_measure_time(void)
 	unlock();
 }
 
+static cmd_report_mcu_version(void)
+{
+	uint32_t ver;
+	int i;
+	unsigned char in[4];
+	putchar('^');
+	putchar(UART_CMD_REPORT_MCU_VER);
+	ver = MCU_VERSION_HASH;
+	in[0] = (ver >> 24) & 0xFF;
+	in[1] = (ver >> 16) & 0xFF;
+	in[2] = (ver >> 8) & 0xFF;
+	in[3] = (ver) & 0xFF;
+	/* base64 encodec */
+	for (i = 0; i < 4; i+=3) {
+		unsigned char t_in[3];
+		unsigned char t_out[4];
+		t_in[0] = in[i];
+		t_in[1] = i+1 >= 4? 0: in[i+1];
+		t_in[2] = i+1 >= 4? 0: in[i+2];
+		encodeblock(t_in, t_out, 3);
+		putchar(t_out[0]);
+		putchar(t_out[1]);
+		putchar(t_out[2]);
+		putchar(t_out[3]);
+	}
+	putchar('$');
+}
+
 static int device_type = UAV_DEVICE_TYPE_UNKNOWN;
 
 static int cmd_read_device_type(void)
@@ -378,6 +408,8 @@ void main(void)
   	Delay_100ms();
   	Delay_100ms();
     if (cmd_read_device_type() != UAV_DEVICE_TYPE_GROUND) continue;
+
+		cmd_report_mcu_version();
 
     if (cmd_query_online() == 0) {
 
