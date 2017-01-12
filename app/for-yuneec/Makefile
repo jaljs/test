@@ -33,7 +33,7 @@ gen_mcu_version:
 	fi
 
 clean:
-	rm -rf *.asm *.sym *.lst *.rel *.ihx *.map *.lk *.rst
+	rm -rf *.asm *.sym *.lst *.rel *.ihx *.map *.lk *.rst version.h
 
 flash: main.ihx ../tools/stm8flash/stm8flash
 	../../tools/stm8flash/stm8flash -c stlinkv2 -p stm8l151?6 -w main.ihx
