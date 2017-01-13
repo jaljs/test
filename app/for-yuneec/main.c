@@ -231,6 +231,7 @@ static void cmd_report_tx_discovery_window_measure_time(void)
 {
 	uint32_t t, d;
 	unsigned char in[8];
+  char ch;
 	int i;
 
 	lock();
@@ -265,13 +266,15 @@ static void cmd_report_tx_discovery_window_measure_time(void)
 
 	putchar('$');
 	unlock();
+  ch = getchar();
 }
 
-static cmd_report_mcu_version(void)
+static void cmd_report_mcu_version(void)
 {
 	uint32_t ver;
 	int i;
 	unsigned char in[4];
+  char ch;
 	putchar('^');
 	putchar(UART_CMD_REPORT_MCU_VER);
 	ver = MCU_VERSION_HASH;
@@ -293,6 +296,7 @@ static cmd_report_mcu_version(void)
 		putchar(t_out[3]);
 	}
 	putchar('$');
+  ch = getchar();
 }
 
 static int device_type = UAV_DEVICE_TYPE_UNKNOWN;
@@ -374,7 +378,6 @@ int16_t get_c8800_freq_offset()
 
 void main(void)
 {
-  uint16_t current_freq_offset;
   uint32_t current_voltage_value = 1878;
 	uint32_t last_freq_offset_voltage = current_voltage_value;
 	uint32_t first_bootstrap = 1;
