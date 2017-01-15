@@ -19,7 +19,7 @@ all: gen_mcu_version
 	$(SDCC) -c ../../drivers/stm8l151x/stm8l15x_syscfg.c $(CFLAGS) $(LDFLAGS)
 	$(SDCC) -c main.c $(CFLAGS) $(LDFLAGS)
 	$(SDCC) main.rel stm8l15x_gpio.rel stm8l15x_clk.rel stm8l15x_tim1.rel stm8l15x_tim2.rel stm8l15x_tim3.rel stm8l15x_usart.rel stm8l15x_exti.rel stm8l15x_itc.rel stm8l15x_dac.rel stm8l15x_syscfg.rel $(CFLAGS) $(LDFLAGS)
-	@cp main.ihx mcu-$$(git show --pretty=format:%h HEAD | head -1)-$$(git log -n1 --date=short --pretty=%cd HEAD).ihx
+	@cp main.ihx mcu-$$(git rev-list HEAD --count)-$$(git show --pretty=format:%h HEAD | head -1)-$$(git log -n1 --date=short --pretty=%cd HEAD).ihx
 	@echo "Generate MCU FW => mcu-$$(git rev-list HEAD --count)-$$(git show --pretty=format:%h HEAD | head -1)-$$(git log -n1 --date=short --pretty=%cd HEAD).ihx"
 
 gen_mcu_version:
