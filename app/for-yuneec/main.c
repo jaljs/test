@@ -20,10 +20,13 @@
 #define GPIO_TX_WIN_IN_PORT GPIOB
 #define GPIO_TX_WIN_IN_PIN GPIO_Pin_1
 
-//#define GPIO_TX_WIN_OUT_PORT GPIOC
-//#define GPIO_TX_WIN_OUT_PIN GPIO_Pin_6
-#define GPIO_TX_WIN_OUT_PORT GPIOB
-#define GPIO_TX_WIN_OUT_PIN GPIO_Pin_3
+#define GPIO_TX_WIN_OUT_PORT GPIOC // for credo demo board
+#define GPIO_TX_WIN_OUT_PIN GPIO_Pin_6
+//#define GPIO_TX_WIN_OUT_PORT GPIOB // for yuneec
+//#define GPIO_TX_WIN_OUT_PIN GPIO_Pin_3
+
+#define GPIO_TX_WIN_OUT2_PORT GPIOA
+#define GPIO_TX_WIN_OUT2_PIN GPIO_Pin_5
 
 enum {
   State_Calc_Falling_Edge_1 = 1,
@@ -42,6 +45,7 @@ static uint32_t current_discovery_window_measure_time = 0;
 
 static void Delay(uint32_t nCount);
 static void enable_interrupts(void);
+static void disable_interrupts(void);
 static uint32_t clk_diff(uint32_t current, uint32_t last);
 static void DAC_Config(void);
 
@@ -314,6 +318,9 @@ static int cmd_read_device_type(void)
 		return UAV_DEVICE_TYPE_UNKNOWN;
 	} else if (ch == GROUND) {
     device_type = UAV_DEVICE_TYPE_GROUND;
+    disable_interrupts();
+		EXTI_SetPinSensitivity(EXTI_Pin_1, EXTI_Trigger_Rising);
+    enable_interrupts();
     return UAV_DEVICE_TYPE_GROUND;
   } else if (ch == SKY) {
     device_type = UAV_DEVICE_TYPE_SKY;
@@ -496,6 +503,11 @@ static void enable_interrupts(void)
   __asm__("rim\n");
 }
 
+static void disable_interrupts(void)
+{
+  __asm__("sim\n");
+}
+
 static void initialize(void)
 {
   sys_clk_high = 0;
@@ -531,6 +543,9 @@ static void GPIO_Config(void)
 
   /* Tx WIN Output */
   GPIO_Init(GPIO_TX_WIN_OUT_PORT, GPIO_TX_WIN_OUT_PIN, GPIO_Mode_Out_PP_Low_Fast);
+
+	/* Tx WIN Output2 */
+  GPIO_Init(GPIO_TX_WIN_OUT2_PORT, GPIO_TX_WIN_OUT2_PIN, GPIO_Mode_Out_PP_Low_Fast);
 
   /* Tx WIN Input (Interrupt) */
   GPIO_Init(GPIO_TX_WIN_IN_PORT, GPIO_TX_WIN_IN_PIN, GPIO_Mode_In_FL_IT);
@@ -597,6 +612,7 @@ static void gpio_tx_win_out_generate_one_pulse(uint16_t micro_second)
   TIM3_SetCounter(0);
   TIM3_SetCompare1(16*micro_second);
   GPIO_ResetBits(GPIO_TX_WIN_OUT_PORT, GPIO_TX_WIN_OUT_PIN);
+  GPIO_ResetBits(GPIO_TX_WIN_OUT2_PORT, GPIO_TX_WIN_OUT2_PIN);
   TIM3_Cmd(ENABLE);
 }
 
@@ -736,5 +752,6 @@ void tim2_upd_ovf(void) __interrupt(19)
 void tim3_cc_usart3(void) __interrupt(22)
 {
   GPIO_SetBits(GPIO_TX_WIN_OUT_PORT, GPIO_TX_WIN_OUT_PIN);
+  GPIO_SetBits(GPIO_TX_WIN_OUT2_PORT, GPIO_TX_WIN_OUT2_PIN);
   TIM3_ClearITPendingBit(TIM3_IT_CC1);
 }
