@@ -5,6 +5,7 @@
 #include "stm8l15x_tim1.h"
 #include "stm8l15x_tim2.h"
 #include "stm8l15x_tim3.h"
+#include "stm8l15x_tim4.h"
 #include "stm8l15x_exti.h"
 #include "stm8l15x_itc.h"
 #include "stm8l15x_dac.h"
@@ -57,6 +58,7 @@ static void CLK_Config(void);
 static void GPIO_Config(void);
 static void TIM2_Config(void);
 static void TIM3_Config(void);
+static void TIM4_Config(void);
 static void gpio_tx_win_out_generate_one_pulse(uint16_t micro_second);
 
 static void initialize(void);
@@ -402,6 +404,7 @@ void main(void)
   TIM1_Config();
   TIM2_Config();
   TIM3_Config();
+  TIM4_Config();
   initialize();
   DAC_SetChannel1Data(DAC_Align_12b_R, current_voltage_value);
 
@@ -576,6 +579,9 @@ static void CLK_Config(void)
   /* Enable TIM3 clock */
   CLK_PeripheralClockConfig(CLK_Peripheral_TIM3, ENABLE);
 
+  /* Enable TIM4 CLK */
+  CLK_PeripheralClockConfig(CLK_Peripheral_TIM4, ENABLE);
+
   /* Enable USART clock */
   CLK_PeripheralClockConfig(CLK_Peripheral_USART1, ENABLE);
 
@@ -609,11 +615,10 @@ static void DAC_Config(void)
 
 static void gpio_tx_win_out_generate_one_pulse(uint16_t micro_second)
 {
-  TIM3_SetCounter(0);
-  TIM3_SetCompare1(16*micro_second);
+  TIM4_SetCounter(62); /* 124 => 1ms, 62 500us */
   GPIO_ResetBits(GPIO_TX_WIN_OUT_PORT, GPIO_TX_WIN_OUT_PIN);
   GPIO_ResetBits(GPIO_TX_WIN_OUT2_PORT, GPIO_TX_WIN_OUT2_PIN);
-  TIM3_Cmd(ENABLE);
+  TIM4_Cmd(ENABLE);
 }
 
 static void TIM2_Config(void)
@@ -649,6 +654,35 @@ static void TIM3_Config(void)
   TIM3_Cmd(DISABLE);
 }
 
+#define TIM4_PERIOD       124
+
+static void TIM4_Config(void)
+{
+  /* TIM4 configuration:
+   - TIM4CLK is set to 16 MHz, the TIM4 Prescaler is equal to 128 so the TIM1 counter
+   clock used is 16 MHz / 128 = 125 000 Hz
+  - With 125 000 Hz we can generate time base:
+      max time base is 2.048 ms if TIM4_PERIOD = 255 --> (255 + 1) / 125000 = 2.048 ms
+      min time base is 0.016 ms if TIM4_PERIOD = 1   --> (  1 + 1) / 125000 = 0.016 ms
+  - In this example we need to generate a time base equal to 1 ms
+   so TIM4_PERIOD = (0.001 * 125000 - 1) = 124 */
+
+  /* Time base configuration */
+  TIM4_TimeBaseInit(TIM4_Prescaler_128, TIM4_PERIOD);
+
+  TIM4_SelectOnePulseMode(TIM4_OPMode_Single);
+
+  /* Clear TIM4 update flag */
+  TIM4_ClearFlag(TIM4_FLAG_Update);
+
+  /* Enable update interrupt */
+  TIM4_ITConfig(TIM4_IT_Update, ENABLE);
+
+  TIM4_Cmd(DISABLE);
+}
+
+//static int gnd_tx_signal_triggered = 0;
+
 uint8_t update_tx_discovery_measure_time(uint32_t t, uint32_t d)
 {
 	uint8_t valid = 0;
@@ -670,6 +704,11 @@ uint8_t update_tx_discovery_measure_time(uint32_t t, uint32_t d)
 				current_discovery_window_measure_time = tmp / 2;
 			}
 
+      //if (cmd_read_device_type() == UAV_DEVICE_TYPE_GROUND && gnd_tx_signal_triggered == 0) {
+        /* for gnd only trigger once in isr */
+       // gpio_tx_win_out_generate_one_pulse(100); /* 1ms */
+        //gnd_tx_signal_triggered = 1;
+      //}
 			valid = 1;
 		}
 	  unlock();
@@ -687,7 +726,9 @@ void exti1_isr(void) __interrupt(9)
 
 	exti1_lock = 1;
 
-  gpio_tx_win_out_generate_one_pulse(2000); /* 1ms */
+  //if (cmd_read_device_type() == UAV_DEVICE_TYPE_SKY) {
+    gpio_tx_win_out_generate_one_pulse(100); /* 1ms */
+  //}
 
   clk_count = TIM2_GetCounter();
   switch(state) {
@@ -713,7 +754,7 @@ void exti1_isr(void) __interrupt(9)
        state = State_Calc_Falling_Edge_1;
        clk_count = 0;
     } else if (curr_clk_diff < last_clk_diff && ((last_clk_diff - curr_clk_diff) > 1000)) {
-			update_tx_discovery_measure_time(curr_clk_diff, last_clk_count);
+  		update_tx_discovery_measure_time(curr_clk_diff, last_clk_count);
       state = State_Calc_Falling_Edge_1;
       clk_count = 0;
     } else {
@@ -751,7 +792,12 @@ void tim2_upd_ovf(void) __interrupt(19)
 
 void tim3_cc_usart3(void) __interrupt(22)
 {
+  TIM3_ClearITPendingBit(TIM3_IT_CC1);
+}
+
+void tim4_upd_ovf_trg(void) __interrupt(25)
+{
   GPIO_SetBits(GPIO_TX_WIN_OUT_PORT, GPIO_TX_WIN_OUT_PIN);
   GPIO_SetBits(GPIO_TX_WIN_OUT2_PORT, GPIO_TX_WIN_OUT2_PIN);
-  TIM3_ClearITPendingBit(TIM3_IT_CC1);
+  TIM4_ClearITPendingBit(TIM4_IT_Update);
 }
