@@ -43,6 +43,11 @@ static uint32_t last_clk_diff;
 static uint32_t last_clk_count;
 static uint32_t current_tx_window_measure_time = 0;
 static uint32_t current_discovery_window_measure_time = 0;
+static int gnd_tx_signal_triggered = 0;
+static uint32_t dis_win_clk = 0;
+static uint32_t last_dis_win_clk = 0;
+static uint32_t period_clk = 0;
+static uint32_t last_tx_trigger_time = 0;
 
 static void Delay(uint32_t nCount);
 static void enable_interrupts(void);
@@ -59,7 +64,7 @@ static void GPIO_Config(void);
 static void TIM2_Config(void);
 static void TIM3_Config(void);
 static void TIM4_Config(void);
-static void gpio_tx_win_out_generate_one_pulse(uint16_t micro_second);
+static void gpio_tx_win_out_generate_one_pulse();
 
 static void initialize(void);
 
@@ -517,10 +522,10 @@ static void initialize(void)
   state = State_Calc_Falling_Edge_1;
 
   /* Set Find Discovery Win interrupt to the highest priority */
-  ITC_SetSoftwarePriority(EXTI1_IRQn, ITC_PriorityLevel_3);
+  ITC_SetSoftwarePriority(EXTI1_IRQn, ITC_PriorityLevel_1);
 
   /* Set TIM3 generate pulse routine to the lowest priority */
-  //ITC_SetSoftwarePriority(TIM2_UPD_OVF_TRG_BRK_IRQn, ITC_PriorityLevel_3);
+  ITC_SetSoftwarePriority(TIM2_UPD_OVF_TRG_BRK_IRQn, ITC_PriorityLevel_3);
 
   /* Set TIM3 generate pulse routine to the lowest priority */
   ITC_SetSoftwarePriority(TIM3_CC_IRQn, ITC_PriorityLevel_2);
@@ -535,6 +540,14 @@ static uint32_t clk_diff(uint32_t current, uint32_t last)
     return current - last;
   else
     return TIM2_PERIOD - last + current;
+}
+
+static uint32_t clk_diff2(uint32_t current, uint32_t last)
+{
+  if (current > last)
+    return current - last;
+  else
+    return last - current;
 }
 
 static void GPIO_Config(void)
@@ -613,12 +626,41 @@ static void DAC_Config(void)
   DAC_DMACmd(DAC_Channel_1, DISABLE);
 }
 
-static void gpio_tx_win_out_generate_one_pulse(uint16_t micro_second)
+static uint32_t trig_counter = 0;
+static uint32_t curr_trig_clk = 0;
+static uint32_t period_counter = 0;
+
+static void gpio_tx_win_out_generate_one_pulse()
 {
-  TIM4_SetCounter(62); /* 124 => 1ms, 62 500us */
+  uint32_t tmp_clk;
+  trig_counter++;
   GPIO_ResetBits(GPIO_TX_WIN_OUT_PORT, GPIO_TX_WIN_OUT_PIN);
   GPIO_ResetBits(GPIO_TX_WIN_OUT2_PORT, GPIO_TX_WIN_OUT2_PIN);
+  curr_trig_clk = ((uint32_t)sys_clk_high << 16 | TIM2_GetCounter());
+
+  TIM4_SetCounter(64); /* loss */
   TIM4_Cmd(ENABLE);
+
+  if (gnd_tx_signal_triggered == 1 && cmd_read_device_type() == UAV_DEVICE_TYPE_GROUND) {
+    if (trig_counter >= 1 && trig_counter <= 8) {
+      if (trig_counter == 2 && (clk_diff2(curr_trig_clk, dis_win_clk) < period_clk)) {
+        last_dis_win_clk = dis_win_clk;
+        period_counter = 0;
+      }
+      tmp_clk = last_dis_win_clk + period_clk * period_counter + trig_counter * current_tx_window_measure_time;
+      TIM3_SetCounter(0);
+      TIM3_SetCompare1(tmp_clk - curr_trig_clk);
+      TIM3_Cmd(ENABLE);
+    } else if (trig_counter == 9) {
+    trig_counter = 0;
+      tmp_clk = last_dis_win_clk + period_clk * period_counter + period_clk;
+      TIM3_SetCounter(0);
+      TIM3_SetCompare1(tmp_clk - curr_trig_clk);
+      TIM3_Cmd(ENABLE);
+      trig_counter = 0;
+      period_counter++;
+    }
+  }
 }
 
 static void TIM2_Config(void)
@@ -640,7 +682,10 @@ static void TIM2_Config(void)
 
 static void TIM3_Config(void)
 {
-  TIM3_TimeBaseInit(TIM3_Prescaler_1, TIM3_CounterMode_Up, 0xFFFF);
+  /* 16M/16 = 1MHz
+     1/1MHz = 1us
+   */
+  TIM3_TimeBaseInit(TIM3_Prescaler_16, TIM3_CounterMode_Up, 0xFFFF);
 
   TIM3_SelectOnePulseMode(TIM3_OPMode_Single);
 
@@ -681,15 +726,14 @@ static void TIM4_Config(void)
   TIM4_Cmd(DISABLE);
 }
 
-//static int gnd_tx_signal_triggered = 0;
-
 uint8_t update_tx_discovery_measure_time(uint32_t t, uint32_t d)
 {
 	uint8_t valid = 0;
 	uint32_t tmp;
 	if (trylock() == 1) {
    	/* TODO Trigger Discovery Event (4ms) */
-	  if ((t > 20000 && t < 30000) && (d > 30000 && d < 40000)) {
+	  if ((t > 27000 && t < 28000) && (d > 33000 && d < 34000)) {
+      dis_win_clk = (((uint32_t)sys_clk_high << 16) | TIM2_GetCounter());
 			if (current_tx_window_measure_time == 0) {
 	 			current_tx_window_measure_time = t;
 			} else {
@@ -704,11 +748,15 @@ uint8_t update_tx_discovery_measure_time(uint32_t t, uint32_t d)
 				current_discovery_window_measure_time = tmp / 2;
 			}
 
-      //if (cmd_read_device_type() == UAV_DEVICE_TYPE_GROUND && gnd_tx_signal_triggered == 0) {
+      /* update dis_win_clk every time */
+      period_clk = current_tx_window_measure_time * 8 + current_discovery_window_measure_time;
+
+      if (cmd_read_device_type() == UAV_DEVICE_TYPE_GROUND && gnd_tx_signal_triggered == 0) {
         /* for gnd only trigger once in isr */
-       // gpio_tx_win_out_generate_one_pulse(100); /* 1ms */
-        //gnd_tx_signal_triggered = 1;
-      //}
+        gnd_tx_signal_triggered = 1;
+        last_dis_win_clk = dis_win_clk;
+        gpio_tx_win_out_generate_one_pulse();
+      }
 			valid = 1;
 		}
 	  unlock();
@@ -726,11 +774,13 @@ void exti1_isr(void) __interrupt(9)
 
 	exti1_lock = 1;
 
-  //if (cmd_read_device_type() == UAV_DEVICE_TYPE_SKY) {
-    gpio_tx_win_out_generate_one_pulse(100); /* 1ms */
-  //}
+  if (cmd_read_device_type() == UAV_DEVICE_TYPE_SKY) {
+    gpio_tx_win_out_generate_one_pulse();
+  }
 
   clk_count = TIM2_GetCounter();
+  last_tx_trigger_time = ((uint32_t)sys_clk_high << 16) | clk_count;
+
   switch(state) {
   case State_Calc_Falling_Edge_1:
     state = State_Calc_Falling_Edge_2;
@@ -754,7 +804,7 @@ void exti1_isr(void) __interrupt(9)
        state = State_Calc_Falling_Edge_1;
        clk_count = 0;
     } else if (curr_clk_diff < last_clk_diff && ((last_clk_diff - curr_clk_diff) > 1000)) {
-  		update_tx_discovery_measure_time(curr_clk_diff, last_clk_count);
+  		//update_tx_discovery_measure_time(curr_clk_diff, last_clk_count);
       state = State_Calc_Falling_Edge_1;
       clk_count = 0;
     } else {
@@ -792,12 +842,29 @@ void tim2_upd_ovf(void) __interrupt(19)
 
 void tim3_cc_usart3(void) __interrupt(22)
 {
+  gpio_tx_win_out_generate_one_pulse();
   TIM3_ClearITPendingBit(TIM3_IT_CC1);
 }
 
+static uint32_t loss_delay = 0;
+
 void tim4_upd_ovf_trg(void) __interrupt(25)
 {
-  GPIO_SetBits(GPIO_TX_WIN_OUT_PORT, GPIO_TX_WIN_OUT_PIN);
-  GPIO_SetBits(GPIO_TX_WIN_OUT2_PORT, GPIO_TX_WIN_OUT2_PIN);
+  if (loss_delay == 0) {
+    if (clk_diff2(curr_trig_clk, last_tx_trigger_time) < 1000) {
+      /* tx trigger */
+      GPIO_SetBits(GPIO_TX_WIN_OUT_PORT, GPIO_TX_WIN_OUT_PIN);
+      GPIO_SetBits(GPIO_TX_WIN_OUT2_PORT, GPIO_TX_WIN_OUT2_PIN);
+    } else {
+      loss_delay = 1;
+      /* loss delay 1ms */
+      TIM4_SetCounter(0); /* loss */
+      TIM4_Cmd(ENABLE);
+    }
+  } else {
+    GPIO_SetBits(GPIO_TX_WIN_OUT_PORT, GPIO_TX_WIN_OUT_PIN);
+    GPIO_SetBits(GPIO_TX_WIN_OUT2_PORT, GPIO_TX_WIN_OUT2_PIN);
+    loss_delay = 0;
+  }
   TIM4_ClearITPendingBit(TIM4_IT_Update);
 }
