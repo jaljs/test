@@ -43,6 +43,7 @@ static uint32_t last_clk_diff;
 static uint32_t last_clk_count;
 static uint32_t current_tx_window_measure_time = 0;
 static uint32_t current_discovery_window_measure_time = 0;
+static int uart_ready = 0;
 static int gnd_tx_signal_triggered = 0;
 static uint32_t dis_win_clk = 0;
 static uint32_t last_dis_win_clk = 0;
@@ -324,12 +325,14 @@ static int cmd_read_device_type(void)
 	if (ch == 'E') {
 		return UAV_DEVICE_TYPE_UNKNOWN;
 	} else if (ch == GROUND) {
+		uart_ready = 1;
     device_type = UAV_DEVICE_TYPE_GROUND;
     disable_interrupts();
 		EXTI_SetPinSensitivity(EXTI_Pin_1, EXTI_Trigger_Rising);
     enable_interrupts();
     return UAV_DEVICE_TYPE_GROUND;
   } else if (ch == SKY) {
+		uart_ready = 1;
     device_type = UAV_DEVICE_TYPE_SKY;
     return UAV_DEVICE_TYPE_SKY;
   } else {
@@ -421,10 +424,10 @@ void main(void)
     /* skip sky auto freq offset */
   	Delay_100ms();
   	Delay_100ms();
-		cmd_report_tx_discovery_window_measure_time();
+		if (uart_ready) cmd_report_tx_discovery_window_measure_time();
   	Delay_100ms();
   	Delay_100ms();
-		cmd_report_mcu_version();
+		if (uart_ready) cmd_report_mcu_version();
   	Delay_100ms();
     if (cmd_read_device_type() != UAV_DEVICE_TYPE_GROUND) continue;
 
@@ -638,10 +641,10 @@ static void gpio_tx_win_out_generate_one_pulse()
   GPIO_ResetBits(GPIO_TX_WIN_OUT2_PORT, GPIO_TX_WIN_OUT2_PIN);
   curr_trig_clk = ((uint32_t)sys_clk_high << 16 | TIM2_GetCounter());
 
-  TIM4_SetCounter(64); /* loss */
+  TIM4_SetCounter(62); /* loss */
   TIM4_Cmd(ENABLE);
 
-  if (gnd_tx_signal_triggered == 1 && cmd_read_device_type() == UAV_DEVICE_TYPE_GROUND) {
+  if (uart_ready == 1 && gnd_tx_signal_triggered == 1 && cmd_read_device_type() == UAV_DEVICE_TYPE_GROUND) {
     if (trig_counter >= 1 && trig_counter <= 8) {
       if (trig_counter == 2 && (clk_diff2(curr_trig_clk, dis_win_clk) < period_clk)) {
         last_dis_win_clk = dis_win_clk;
@@ -751,7 +754,7 @@ uint8_t update_tx_discovery_measure_time(uint32_t t, uint32_t d)
       /* update dis_win_clk every time */
       period_clk = current_tx_window_measure_time * 8 + current_discovery_window_measure_time;
 
-      if (cmd_read_device_type() == UAV_DEVICE_TYPE_GROUND && gnd_tx_signal_triggered == 0) {
+      if (uart_ready == 1 && gnd_tx_signal_triggered == 0 && cmd_read_device_type() == UAV_DEVICE_TYPE_GROUND) {
         /* for gnd only trigger once in isr */
         gnd_tx_signal_triggered = 1;
         last_dis_win_clk = dis_win_clk;
@@ -774,7 +777,7 @@ void exti1_isr(void) __interrupt(9)
 
 	exti1_lock = 1;
 
-  if (cmd_read_device_type() == UAV_DEVICE_TYPE_SKY) {
+  if (uart_ready == 1 && cmd_read_device_type() == UAV_DEVICE_TYPE_SKY) {
     gpio_tx_win_out_generate_one_pulse();
   }
 
